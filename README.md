@@ -21,6 +21,7 @@ pip freeze > requirements.txt
 ## Run API
 
 ```
+cp .env-example .env
 sh scripts/start-dev.sh
 ```
 
