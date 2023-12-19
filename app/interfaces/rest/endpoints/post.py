@@ -1,8 +1,9 @@
 from typing import Optional
 
-from fastapi import APIRouter, Body, UploadFile, File, Depends, Query
+from fastapi import APIRouter, Body, UploadFile, File, Depends, Query, HTTPException
 
-from app.domain.post.entity import Post, PostInCreatePayload, PostInCreate, ManyPostResponse, PostInUpdate
+from app.domain.post.entity import Post, PostInCreatePayload, PostInCreate, ManyPostResponse, PostInUpdate, SearchByPost
+from app.domain.shared.enum import Sort
 from app.domain.user.entity import UserInDB
 from app.infra.database.models.user import UserModel
 from app.infra.security.security_service import get_current_user
@@ -24,9 +25,22 @@ router = APIRouter()
 def get_all_post(
         page_index: int = Query(default=1, title="Page index"),
         page_size: int = Query(default=20, title="Page size"),
-        list_post_use_case: ListPostUseCase = Depends(ListPostUseCase)
+        search: str = Query(Optional[str], title="Search"),
+        search_by: Optional[SearchByPost] = SearchByPost.TITLE,
+        list_post_use_case: ListPostUseCase = Depends(ListPostUseCase),
+        sort: Optional[Sort] = Sort.DESC,
+        sort_by: Optional[str] = 'created_at'
+
 ):
-    req_object = ListPostRequestObject.builder(page_index=page_index, page_size=page_size)
+    annotations = {}
+    for base in reversed(Post.__mro__):
+        annotations.update(getattr(base, '__annotations__', {}))
+    if sort_by not in annotations:
+        raise HTTPException(status_code=400, detail=f"Invalid sort_by: {sort_by}")
+
+    sort_query = {sort_by: 1 if sort is sort.ASCE else -1}
+    req_object = ListPostRequestObject.builder(page_index=page_index, page_size=page_size, search=search,
+                                               search_by=search_by, sort=sort_query)
     response = list_post_use_case.execute(request_object=req_object)
     return response
 

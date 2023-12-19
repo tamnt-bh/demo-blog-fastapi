@@ -28,11 +28,11 @@ class TestUserApi(unittest.TestCase):
         cls.user2 = UserModel(
             email="test2@test.com",
             role="admin",
-            fullname="John Doe",
+            fullname="User2",
             password=get_password_hash("12345678")
         ).save()
         cls.post = PostModel(
-            title="Test",
+            title="Post Default",
             description="description",
             author=cls.user2
         ).save()
@@ -65,7 +65,6 @@ class TestUserApi(unittest.TestCase):
         r = self.client.get(
             url="/api/post",
         )
-        print(r.json())
         assert r.status_code == 200
         resp = r.json()
         assert resp["pagination"]["total"] == 2
@@ -119,3 +118,42 @@ class TestUserApi(unittest.TestCase):
             assert r.status_code == 200
             post = PostModel.objects(id=r.json().get("id")).get()
             assert post.title == "Test updated"
+
+
+    def test_get_all_posts_by_search_title(self):
+        sub_title_test = "default"
+        r = self.client.get(
+            url="/api/post?search={}&search_by=title".format(sub_title_test),
+        )
+        assert r.status_code == 200
+        resp = r.json()
+        assert resp["pagination"]["total"] == 1
+        assert sub_title_test.lower() in resp["data"][0]["title"].lower()
+
+    def test_get_all_posts_by_search_author(self):
+        sub_author_test = "2"
+        r = self.client.get(
+            url="/api/post?search={}&search_by=author".format(sub_author_test),
+        )
+        assert r.status_code == 200
+        resp = r.json()
+        assert resp["pagination"]["total"] == 1
+        assert sub_author_test.lower() in resp["data"][0]["author"]["fullname"].lower()
+
+    def test_get_all_posts_sort_created_at_asce(self):
+        r = self.client.get(
+            url="/api/post?sort=asce&sort_by=created_at",
+        )
+        assert r.status_code == 200
+        resp = r.json()
+        assert resp["pagination"]["total"] == 2
+        assert resp["data"][0]["created_at"] <= resp["data"][1]["created_at"]
+
+    def test_get_all_posts_sort_created_at_desc(self):
+        r = self.client.get(
+            url="/api/post?sort_by=created_at",
+        )
+        assert r.status_code == 200
+        resp = r.json()
+        assert resp["pagination"]["total"] == 2
+        assert resp["data"][0]["created_at"] >= resp["data"][1]["created_at"]

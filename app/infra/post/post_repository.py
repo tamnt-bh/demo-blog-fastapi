@@ -1,3 +1,4 @@
+from turtle import title
 from typing import List, Dict, Union, Optional, Any
 
 from bson import ObjectId
@@ -27,17 +28,107 @@ class PostRepository:
 
     def list(self,
              page_index: int = 1,
-             page_size: int = 20
+             page_size: int = 20,
+             title: Optional[str] = None,
+             fullname: Optional[str] = None,
+             sort: Optional[Dict[str, int]] = None,
              ) -> List[PostModel]:
+        pipeline = [
+            {"$sort": sort if sort else {"created_at": -1}},
+            {"$skip": page_size * (page_index - 1)},
+            {"$limit": page_size}
+        ]
+
+        if isinstance(fullname, str):
+            pipeline.extend([
+                {
+                    "$lookup": {
+                        "from": "Users",
+                        "localField": "author",
+                        "foreignField": "_id",
+                        "as": "author_info"
+                    }
+                },
+                {
+                    "$unwind": {
+                        "path": "$author_info",
+                        "preserveNullAndEmptyArrays": True
+                    }
+                },
+                {
+                    "$match": {
+                        "author_info.fullname": {"$regex": fullname, "$options": "i"}
+                    }
+                },
+                {
+                    "$project": {
+                        "author_info": 0
+                    }
+                }
+            ])
+
+        if isinstance(title, str):
+            pipeline.extend([
+                {
+                    "$match": {
+                        "title": {"$regex": title, "$options": "i"}
+                    }
+                },
+            ])
+
         try:
-            docs = (PostModel
-                    .objects()
-                    .order_by("-_id")
-                    .skip((page_index - 1) * page_size)
-                    .limit(page_size))
-            return docs
+            docs = PostModel.objects().aggregate(pipeline)
+            return [PostModel.from_mongo(doc) for doc in docs] if docs else []
         except Exception:
             return []
+
+    def count_list(self,
+                   title: Optional[str] = None,
+                   fullname: Optional[str] = None
+                   ) -> int:
+        pipeline = []
+
+        if isinstance(fullname, str):
+            pipeline.extend([
+                {
+                    "$lookup": {
+                        "from": "Users",
+                        "localField": "author",
+                        "foreignField": "_id",
+                        "as": "author_info"
+                    }
+                },
+                {
+                    "$unwind": {
+                        "path": "$author_info",
+                        "preserveNullAndEmptyArrays": True
+                    }
+                },
+                {
+                    "$match": {
+                        "author_info.fullname": {"$regex": fullname, "$options": "i"}
+                    }
+                },
+                {"$count": "document_count"}
+            ])
+
+        if isinstance(title, str):
+            pipeline.extend([
+                {
+                    "$match": {
+                        "title": {"$regex": title, "$options": "i"}
+                    }
+                },
+                {"$count": "document_count"}
+            ])
+
+        try:
+            if not isinstance(title, str) and not isinstance(fullname, str):
+                return PostModel._get_collection().count_documents({})
+            docs = PostModel.objects().aggregate(pipeline)
+            return list(docs)[0]['document_count']
+        except Exception:
+            return 0
 
     def count(self, conditions: Dict[str, Union[str, bool, ObjectId]] = {}) -> int:
         try:
@@ -56,8 +147,7 @@ class PostRepository:
         try:
             doc = PostModel._get_collection().find_one(conditions)
             return PostModel.from_mongo(doc) if doc else None
-        except Exception as e:
-            print(e)
+        except Exception:
             return None
 
     def update(self, id: ObjectId, data: Union[PostInUpdate, Dict[str, Any]]) -> bool:

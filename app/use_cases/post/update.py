@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional
 
 from bson import ObjectId
@@ -46,7 +47,11 @@ class UpdatePostUseCase(use_case.UseCase):
         if not post:
             return response_object.ResponseFailure.build_not_found_error(message="Post does not exist.")
 
-        self.post_repository.update(id=post.id, data=req_object.payload)
+        updated_at = post.updated_at.copy()
+        updated_at.append(datetime.now())
+        payload = PostInUpdate(**req_object.payload.model_dump(exclude=({"updated_at"})), updated_at=updated_at)
+        self.post_repository.update(id=post.id,
+                                    data=payload)
         post.reload()
 
         return Post(**PostInDB.model_validate(post).model_dump(exclude=({"author"})),

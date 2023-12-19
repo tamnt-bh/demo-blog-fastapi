@@ -1,12 +1,16 @@
 from enum import Enum
 
 
-class _ExtendedEnum(Enum):
+class ExtendedEnum(Enum):
     @classmethod
     def list(cls):
         return list(map(lambda c: c.value, cls))
 
 
-class UserRole(str, _ExtendedEnum):
+class UserRole(str, ExtendedEnum):
     USER = "user"
     ADMIN = "admin"
+
+class Sort(str, ExtendedEnum):
+    ASCE = "asce"
+    DESC = "desc"
