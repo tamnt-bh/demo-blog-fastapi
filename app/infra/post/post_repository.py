@@ -1,4 +1,3 @@
-from turtle import title
 from typing import List, Dict, Union, Optional, Any
 
 from bson import ObjectId
@@ -29,8 +28,7 @@ class PostRepository:
     def list(self,
              page_index: int = 1,
              page_size: int = 20,
-             title: Optional[str] = None,
-             fullname: Optional[str] = None,
+             match_pipeline: Optional[Dict[str, Any]] = None,
              sort: Optional[Dict[str, int]] = None,
              ) -> List[PostModel]:
         pipeline = [
@@ -39,42 +37,8 @@ class PostRepository:
             {"$limit": page_size}
         ]
 
-        if isinstance(fullname, str):
-            pipeline.extend([
-                {
-                    "$lookup": {
-                        "from": "Users",
-                        "localField": "author",
-                        "foreignField": "_id",
-                        "as": "author_info"
-                    }
-                },
-                {
-                    "$unwind": {
-                        "path": "$author_info",
-                        "preserveNullAndEmptyArrays": True
-                    }
-                },
-                {
-                    "$match": {
-                        "author_info.fullname": {"$regex": fullname, "$options": "i"}
-                    }
-                },
-                {
-                    "$project": {
-                        "author_info": 0
-                    }
-                }
-            ])
-
-        if isinstance(title, str):
-            pipeline.extend([
-                {
-                    "$match": {
-                        "title": {"$regex": title, "$options": "i"}
-                    }
-                },
-            ])
+        if match_pipeline is not None:
+            pipeline.append(match_pipeline)
 
         try:
             docs = PostModel.objects().aggregate(pipeline)
@@ -83,48 +47,15 @@ class PostRepository:
             return []
 
     def count_list(self,
-                   title: Optional[str] = None,
-                   fullname: Optional[str] = None
+                   match_pipeline: Optional[Dict[str, Any]] = None,
                    ) -> int:
         pipeline = []
 
-        if isinstance(fullname, str):
-            pipeline.extend([
-                {
-                    "$lookup": {
-                        "from": "Users",
-                        "localField": "author",
-                        "foreignField": "_id",
-                        "as": "author_info"
-                    }
-                },
-                {
-                    "$unwind": {
-                        "path": "$author_info",
-                        "preserveNullAndEmptyArrays": True
-                    }
-                },
-                {
-                    "$match": {
-                        "author_info.fullname": {"$regex": fullname, "$options": "i"}
-                    }
-                },
-                {"$count": "document_count"}
-            ])
-
-        if isinstance(title, str):
-            pipeline.extend([
-                {
-                    "$match": {
-                        "title": {"$regex": title, "$options": "i"}
-                    }
-                },
-                {"$count": "document_count"}
-            ])
+        if match_pipeline is not None:
+            pipeline.append(match_pipeline)
+        pipeline.append({"$count": "document_count"})
 
         try:
-            if not isinstance(title, str) and not isinstance(fullname, str):
-                return PostModel._get_collection().count_documents({})
             docs = PostModel.objects().aggregate(pipeline)
             return list(docs)[0]['document_count']
         except Exception:

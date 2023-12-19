@@ -30,7 +30,6 @@ def get_all_post(
         list_post_use_case: ListPostUseCase = Depends(ListPostUseCase),
         sort: Optional[Sort] = Sort.DESC,
         sort_by: Optional[str] = 'created_at'
-
 ):
     annotations = {}
     for base in reversed(Post.__mro__):

@@ -1,13 +1,16 @@
 import math
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 
+from bson import ObjectId
 from fastapi import Depends
 
 from app.domain.post.entity import PostInDB, Post, ManyPostResponse, SearchByPost
 from app.domain.shared.entity import Pagination
 from app.domain.user.entity import User, UserInDB
 from app.infra.database.models.post import PostModel
+from app.infra.database.models.user import UserModel
 from app.infra.post.post_repository import PostRepository
+from app.infra.user.user_repository import UserRepository
 from app.shared import request_object, use_case
 
 
@@ -29,19 +32,41 @@ class ListPostRequestObject(request_object.ValidRequestObject):
 
 
 class ListPostUseCase(use_case.UseCase):
-    def __init__(self, post_repository: PostRepository = Depends(PostRepository)):
+    def __init__(
+            self,
+            post_repository: PostRepository = Depends(PostRepository),
+            user_repository: UserRepository = Depends(UserRepository)
+    ):
         self.post_repository = post_repository
+        self.user_repository = user_repository
 
     def process_request(self, req_object: ListPostRequestObject):
-        option = {'title': req_object.search} if req_object.search_by is SearchByPost.TITLE else {
-            'fullname': req_object.search}
+        match_pipeline: Optional[Dict[str, Any]] = None
+
+        if isinstance(req_object.search, str):
+            if req_object.search_by is SearchByPost.TITLE:
+                match_pipeline = {
+                    "$match": {
+                        "title": {"$regex": req_object.search, "$options": "i"}
+                    }
+                }
+            else:
+                authors: Optional[List[UserModel]] = self.user_repository.find(conditions={
+                    "fullname": {"$regex": req_object.search, "$options": "i"}
+                })
+                match_pipeline = {
+                    "$match": {
+                        "author": {"$in": [ObjectId(author.id) for author in authors]}
+                    }
+                }
+
         posts: Optional[List[PostModel]] = self.post_repository.list(page_size=req_object.page_size,
                                                                      page_index=req_object.page_index,
                                                                      sort=req_object.sort,
-                                                                     **option
+                                                                     match_pipeline=match_pipeline
                                                                      )
 
-        total = self.post_repository.count_list(**option)
+        total = self.post_repository.count_list(match_pipeline=match_pipeline)
 
         return ManyPostResponse(pagination=Pagination(total=total,
                                                       page_index=req_object.page_index,

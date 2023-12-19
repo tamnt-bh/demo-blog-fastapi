@@ -1,3 +1,4 @@
+from builtins import isinstance
 from typing import Union, Optional, List, Dict, Any
 
 from bson import ObjectId
@@ -67,3 +68,23 @@ class UserRepository:
             return True
         except Exception:
             return False
+
+    def find(self,
+             page_size: Optional[int] = None,
+             page_index: Optional[int] = None,
+             conditions: Dict[str, Any] = {},
+             sort: Optional[Dict[str, int]] = None,
+             ) -> List[UserModel]:
+        pipeline = [
+            {"$sort": sort if sort else {"_id": -1}},
+            {"$match": conditions}
+        ]
+
+        if isinstance(page_size, int) and isinstance(page_index, int):
+            pipeline.extend([{"$skip": page_size * (page_index - 1)}, {"$limit": page_size}])
+
+        try:
+            docs = UserModel.objects().aggregate(pipeline)
+            return [UserModel.from_mongo(doc) for doc in docs] if docs else []
+        except Exception:
+            return []
